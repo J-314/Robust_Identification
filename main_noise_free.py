@@ -103,10 +103,16 @@ if __name__ == '__main__':
 
     # amplitude of input and noise (gaussian)
     amplitude_u = 1
-    amplitude_e = 0
+    amplitude_e = 0.001
+    
+    # Impulsive sparse noise (outliers)
+    add_impulsive_noise = True
+    dwell_time = 100             # minimum time (steps) between one impulse and the next
+    impulse_amp_bound = 100.0     # maximum amplitude bound for the impulse
+    impulse_prob = 0.05          # probability of an impulse occurring after the dwell time
 
     #value of lambda 
-    lamb = 0.9
+    lamb = 0.99
 
     # time_varying W_t or Constant W
     time_varying = True
@@ -121,8 +127,7 @@ if __name__ == '__main__':
     # randomize or not the simulations
     random = False
     #######################################
-
-
+    
     theta0 = np.concatenate([a,b])
     system = arx(a,b) #it starts with regressor full of zeros
 
@@ -134,18 +139,34 @@ if __name__ == '__main__':
     if W_const is None and not time_varying:
         with np.load("Wt.npz") as data:
             W0 = data["Wt"]
-    else:
+    elif not time_varying:
         W0 = W_const
     
     est = estimator(lamb = lamb ,n=6, W0 = W0, time_varying = time_varying)
     
     u = rng.standard_normal(N)*amplitude_u
     e = rng.standard_normal(N)*amplitude_e
+    
+    # impulsive noise generation f_t
+    f = np.zeros(N)
+    if add_impulsive_noise:
+        time_since_last = dwell_time
+        for i in range(N):
+            if time_since_last >= dwell_time:
+                if rng.random() < impulse_prob: # after the dwell_time, impulse_prob probability of having an impulse
+                    f[i] = rng.uniform(-impulse_amp_bound, impulse_amp_bound)
+                    time_since_last = 0
+                else:
+                    time_since_last += 1
+            else:
+                time_since_last += 1
+
     y = np.zeros(N+1)
 
     theta = np.zeros((N+1,6))
     for i in range(N):
-        system.step(u[i],e[i])
+        # total error is the sum of gaussian and impulsive noise
+        system.step(u[i], e[i] + f[i])
         yt, xt = system.get_yt_phit()
         est.update_theta(yt,xt)
         thetat = est.get_theta()
@@ -156,8 +177,6 @@ if __name__ == '__main__':
     if time_varying and save: 
         Wt, _ = est.get_Wt_Pt()
         np.savez("Wt", Wt = Wt)
-         
-
 
     plt.plot(theta, 'b')
     plt.plot(np.array([0,N]),np.concatenate([theta0.reshape(1,-1),theta0.reshape(1,-1)]),'r')

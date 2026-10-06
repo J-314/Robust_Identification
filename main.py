@@ -47,8 +47,6 @@ class arx(): # y_t = [y_t-1 ... y_t-na]'a + [u_t-1 ... u_t-nb]'b
 
         self.phi_t = np.concatenate([phi_y,phi_u],0)
 
-sat_1 = lambda x: np.clip(x,-1,1)  # one-line function definitions
-sat_s = lambda s,x: s*sat_1(x)
 
 class estimator():
     def __init__(self,lamb, n: int|None = None, W0: np.ndarray|None = None, time_varying: bool = False):
@@ -68,6 +66,7 @@ class estimator():
         Pt = self.Pt
         eps = yt - xt@theta
         arg = lamb*eps/(xt@Pt@xt)
+        sat_1 = lambda x: np.clip(x,-1,1)  # one-line function definitions
         theta = theta + 1/lamb*sat_1(arg)*Pt@xt
         self.theta_hat = theta
         if self.time_varying:
@@ -103,16 +102,16 @@ if __name__ == '__main__':
 
     # amplitude of input and noise (gaussian)
     amplitude_u = 1
-    amplitude_e = 0.001
+    amplitude_e = 0.1
     
     # Impulsive sparse noise (outliers)
     add_impulsive_noise = True
-    dwell_time = 100             # minimum time (steps) between one impulse and the next
+    dwell_time = 5000             # minimum time (steps) between one impulse and the next
     impulse_amp_bound = 100.0     # maximum amplitude bound for the impulse
     impulse_prob = 0.05          # probability of an impulse occurring after the dwell time
 
     #value of lambda 
-    lamb = 0.99
+    lamb = 0.999
 
     # time_varying W_t or Constant W
     time_varying = True
@@ -144,7 +143,7 @@ if __name__ == '__main__':
     
     est = estimator(lamb = lamb ,n=6, W0 = W0, time_varying = time_varying)
     
-    u = rng.standard_normal(N)*amplitude_u
+    u = rng.uniform(-1,1, N)*amplitude_u
     e = rng.standard_normal(N)*amplitude_e
     
     # impulsive noise generation f_t
@@ -160,13 +159,15 @@ if __name__ == '__main__':
                     time_since_last += 1
             else:
                 time_since_last += 1
+    # total error is the sum of gaussian and impulsive noise
+    noise = e + f
 
     y = np.zeros(N+1)
 
     theta = np.zeros((N+1,6))
     for i in range(N):
-        # total error is the sum of gaussian and impulsive noise
-        system.step(u[i], e[i] + f[i])
+        
+        system.step(u[i], noise[i])
         yt, xt = system.get_yt_phit()
         est.update_theta(yt,xt)
         thetat = est.get_theta()
@@ -178,6 +179,12 @@ if __name__ == '__main__':
         Wt, _ = est.get_Wt_Pt()
         np.savez("Wt", Wt = Wt)
 
-    plt.plot(theta, 'b')
-    plt.plot(np.array([0,N]),np.concatenate([theta0.reshape(1,-1),theta0.reshape(1,-1)]),'r')
+    fig, ax = plt.subplots(3,2)
+    for i in range(3):
+        for j in range(2):
+            idx = i + j*3
+            ax[i][j].plot(theta[:,idx])
+            ax[i][j].plot(np.array([0,N]),np.array([theta0[idx],theta0[idx]]),'r')
+    fig2, ax2 = plt.figure(), plt.axes()
+    ax2.plot(noise)
     plt.show()

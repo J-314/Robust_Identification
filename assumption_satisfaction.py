@@ -48,8 +48,6 @@ class arx(): # y_t = [y_t-1 ... y_t-na]'a + [u_t-1 ... u_t-nb]'b
 
         self.phi_t = np.concatenate([phi_y,phi_u],0)
 
-sat_1 = lambda x: np.clip(x,-1,1)  # one-line function definitions
-sat_s = lambda s,x: s*sat_1(x)
 
 class estimator():
     def __init__(self,lamb, n: int|None = None, W0: np.ndarray|None = None, time_varying: bool = False):
@@ -69,6 +67,7 @@ class estimator():
         Pt = self.Pt
         eps = yt - xt@theta
         arg = lamb*eps/(xt@Pt@xt)
+        sat_1 = lambda x: np.clip(x,-1,1)  # one-line function definitions
         theta = theta + 1/lamb*sat_1(arg)*Pt@xt
         self.theta_hat = theta
         if self.time_varying:
